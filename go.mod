@@ -1,4 +1,4 @@
-module github.com/daidaiJ/openrouter-cli
+module github.com/daidaiJ/modelq
 
 go 1.25.0
 

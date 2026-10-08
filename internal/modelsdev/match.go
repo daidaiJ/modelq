@@ -22,9 +22,9 @@ const maxMatches = 32
 //	100  exact id in the openrouter provider (OpenRouter-style id)
 //	 95  exact id minus any ":variant" suffix (e.g. ":free") in openrouter
 //	 90  exact id in any other provider
+//	 86  "vendor/model" where vendor maps to a provider and model is exact
 //	 85  canonical_model_id equals the query
-//	 80  "vendor/model" where vendor maps to a provider and model is exact
-//	 78  same, comparing model ids with separators normalized
+//	 84  same, comparing model ids with separators normalized
 //	 60  provider-qualified model id prefix
 //	 40  substring of a model id anywhere in the catalog
 //	 30  substring of a display name
@@ -104,13 +104,13 @@ func (c *Catalog) Match(query string) []Match {
 				continue
 			}
 			if m, ok := p.Models[model]; ok {
-				add(pid, p, m, "vendor", 80)
+				add(pid, p, m, "vendor", 86)
 				continue
 			}
 			for mid, m := range p.Models {
 				switch {
 				case normID(mid) == mn:
-					add(pid, p, m, "vendor", 78)
+					add(pid, p, m, "vendor", 84)
 				case len(mn) >= 4 && strings.HasPrefix(normID(mid), mn):
 					add(pid, p, m, "vendor-prefix", 60)
 				}

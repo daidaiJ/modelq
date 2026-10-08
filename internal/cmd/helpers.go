@@ -3,14 +3,16 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 
-	"github.com/daidaiJ/openrouter-cli/internal/api"
-	"github.com/daidaiJ/openrouter-cli/internal/format"
-	"github.com/daidaiJ/openrouter-cli/internal/modelsdev"
+	"github.com/daidaiJ/modelq/internal/api"
+	"github.com/daidaiJ/modelq/internal/format"
+	"github.com/daidaiJ/modelq/internal/locale"
+	"github.com/daidaiJ/modelq/internal/modelsdev"
 )
 
 // loadModelsDev fetches the models.dev catalog and warns on stderr when a
@@ -21,8 +23,8 @@ func loadModelsDev(ctx context.Context, refresh bool) (*modelsdev.Catalog, error
 		return nil, err
 	}
 	if cat.Stale {
-		fmt.Fprintf(os.Stderr, "models.dev: refresh failed, using cached copy from %s\n",
-			cat.FetchedAt.Format("2006-01-02 15:04"))
+		stale := fmt.Sprintf("models.dev: refresh failed, using cached copy from %s", cat.FetchedAt.Format("2006-01-02 15:04"))
+		fmt.Fprintln(os.Stderr, locale.T(stale, "models.dev: 刷新失败，使用 "+cat.FetchedAt.Format("2006-01-02 15:04")+" 的缓存副本"))
 	}
 	return cat, nil
 }
@@ -43,23 +45,56 @@ func modelsDevRef(cat *modelsdev.Catalog, openrouterID string) *modelsdev.Match 
 	return nil
 }
 
-// fetchModels loads the catalog using the resolved client.
+// sourceSel selects which catalogs a command touches.
+type sourceSel struct {
+	openrouter bool
+	modelsdev  bool
+}
+
+// parseSource validates the -s/--source value; empty means both catalogs.
+func parseSource(v string) (sourceSel, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "all":
+		return sourceSel{openrouter: true, modelsdev: true}, nil
+	case "openrouter", "or":
+		return sourceSel{openrouter: true}, nil
+	case "modelsdev", "models.dev", "models-dev", "md":
+		return sourceSel{modelsdev: true}, nil
+	default:
+		return sourceSel{}, fmt.Errorf("%s", locale.T(
+			fmt.Sprintf("unknown --source %q (valid: all, openrouter, modelsdev)", v),
+			fmt.Sprintf("未知 --source %q（可选：all、openrouter、modelsdev）", v)))
+	}
+}
+
+// modelHit is a resolved model from either catalog; Source discriminates:
+// "openrouter" fills Model, "models.dev" fills ModelsDev.
+type modelHit struct {
+	Source    string           `json:"source"`
+	Model     *api.Model       `json:"model,omitempty"`
+	ModelsDev *modelsdev.Match `json:"models_dev,omitempty"`
+}
+
+// fetchModels loads the OpenRouter catalog using the resolved client.
 func fetchModels(ctx context.Context, c *api.Client) ([]api.Model, error) {
 	models, err := c.Models(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if len(models) == 0 {
-		return nil, fmt.Errorf("openrouter returned an empty model catalog")
+		return nil, errors.New(locale.T("openrouter returned an empty model catalog", "OpenRouter 返回了空模型目录"))
 	}
 	return models, nil
 }
 
-// matchModel resolves a user-supplied id: exact match first, then prefix, then substring.
-func matchModel(models []api.Model, q string) (*api.Model, error) {
+// resolveOpenRouter matches a user id against the OpenRouter catalog: exact,
+// then unique prefix, then unique substring. found=false means no hit;
+// a found result with m == nil is an ambiguous hit and Ambiguous lists the
+// candidate ids.
+func resolveOpenRouter(models []api.Model, q string) (m *api.Model, ambiguous []string, found bool) {
 	q = strings.TrimSpace(q)
 	if q == "" {
-		return nil, fmt.Errorf("empty model id")
+		return nil, nil, false
 	}
 	lower := strings.ToLower(q)
 	var prefix, substr []*api.Model
@@ -67,7 +102,7 @@ func matchModel(models []api.Model, q string) (*api.Model, error) {
 		id := strings.ToLower(models[i].ID)
 		switch {
 		case id == lower:
-			return &models[i], nil
+			return &models[i], nil, true
 		case strings.HasPrefix(id, lower):
 			prefix = append(prefix, &models[i])
 		case strings.Contains(id, lower):
@@ -80,16 +115,52 @@ func matchModel(models []api.Model, q string) (*api.Model, error) {
 	}
 	switch len(pick) {
 	case 0:
-		return nil, fmt.Errorf("no model matches %q (try: orx search %s)", q, q)
+		return nil, nil, false
 	case 1:
-		return pick[0], nil
+		return pick[0], nil, true
 	default:
 		ids := make([]string, 0, len(pick))
-		for _, m := range pick {
-			ids = append(ids, m.ID)
+		for _, mm := range pick {
+			ids = append(ids, mm.ID)
 		}
 		sort.Strings(ids)
-		return nil, fmt.Errorf("%q is ambiguous, candidates:\n  %s", q, strings.Join(ids, "\n  "))
+		return nil, ids, true
+	}
+}
+
+// ambiguousError renders an ambiguous-id error, capping the candidate list.
+func ambiguousError(q string, ids []string) error {
+	const maxShown = 10
+	shown := ids
+	if len(ids) > maxShown {
+		shown = ids[:maxShown]
+	}
+	list := strings.Join(shown, "\n  ")
+	if len(ids) > maxShown {
+		list += locale.T(
+			fmt.Sprintf("\n  ... and %d more (mqx search %s)", len(ids)-maxShown, q),
+			fmt.Sprintf("\n  ……另有 %d 个（mqx search %s）", len(ids)-maxShown, q))
+	}
+	return fmt.Errorf("%s", locale.T(
+		fmt.Sprintf("%q is ambiguous, candidates:\n  %s", q, list),
+		fmt.Sprintf("%q 有歧义，候选：\n  %s", q, list)))
+}
+
+// matchModel resolves a user-supplied id with actionable errors (compare).
+func matchModel(models []api.Model, q string) (*api.Model, error) {
+	if strings.TrimSpace(q) == "" {
+		return nil, errors.New(locale.T("empty model id", "模型 id 为空"))
+	}
+	m, ambiguous, found := resolveOpenRouter(models, q)
+	switch {
+	case found && m != nil:
+		return m, nil
+	case found:
+		return nil, ambiguousError(q, ambiguous)
+	default:
+		return nil, fmt.Errorf("%s", locale.T(
+			fmt.Sprintf("no model matches %q (try: mqx search %s)", q, q),
+			fmt.Sprintf("没有模型匹配 %q（试试：mqx search %s）", q, q)))
 	}
 }
 
@@ -168,26 +239,77 @@ func searchModels(models []api.Model, query string) []api.Model {
 	return out
 }
 
+// foldID lowercases and folds separators so terms match across catalogs that
+// differ in "."/"_"/"-" conventions.
+func foldID(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "_", "-")
+	return strings.ReplaceAll(s, ".", "-")
+}
+
+// mdHit is one models.dev search result.
+type mdHit struct {
+	ProviderID string
+	Model      modelsdev.Model
+}
+
+// mdDisplayID renders a models.dev model as an addressable id; bare ids get
+// the provider prefix so "zhipuai/glm-5.3-flash" round-trips through show.
+func mdDisplayID(providerID string, m modelsdev.Model) string {
+	if strings.Contains(m.ID, "/") {
+		return m.ID
+	}
+	return providerID + "/" + m.ID
+}
+
+// searchModelsDev filters the models.dev catalog by AND-ed terms over id,
+// name, family, canonical id, and provider id.
+func searchModelsDev(cat *modelsdev.Catalog, query string) []mdHit {
+	terms := strings.Fields(foldID(query))
+	if len(terms) == 0 {
+		return nil
+	}
+	var hits []mdHit
+	for pid, p := range cat.Providers {
+		for _, m := range p.Models {
+			hay := foldID(pid + " " + m.ID + " " + m.Name + " " + m.Family + " " + m.CanonicalModelID)
+			ok := true
+			for _, t := range terms {
+				if !strings.Contains(hay, t) {
+					ok = false
+					break
+				}
+			}
+			if ok {
+				hits = append(hits, mdHit{ProviderID: pid, Model: m})
+			}
+		}
+	}
+	sort.Slice(hits, func(i, j int) bool {
+		return mdDisplayID(hits[i].ProviderID, hits[i].Model) < mdDisplayID(hits[j].ProviderID, hits[j].Model)
+	})
+	return hits
+}
+
 type filterOpts struct {
 	FreeOnly   bool
 	MinContext int64
 	Modality   string
 }
 
-type listOpts struct {
-	filterOpts
-	Sort  string
-	Desc  bool
-	Limit int
-	JSON  bool
-}
-
-// renderList prints the compact table used by list and search.
+// renderList prints the compact table used by list (OpenRouter catalog).
 func renderList(models []api.Model, limit int) string {
 	if limit > 0 && len(models) > limit {
 		models = models[:limit]
 	}
-	headers := []string{"MODEL", "CTX", "MAX OUT", "INPUT/M", "OUTPUT/M", "CACHE/M"}
+	headers := []string{
+		locale.T("MODEL", "模型"),
+		locale.T("CTX", "上下文"),
+		locale.T("MAX OUT", "最大输出"),
+		locale.T("INPUT/M", "输入/M"),
+		locale.T("OUTPUT/M", "输出/M"),
+		locale.T("CACHE/M", "缓存/M"),
+	}
 	rows := make([][]string, 0, len(models))
 	for _, m := range models {
 		rows = append(rows, []string{

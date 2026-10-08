@@ -7,6 +7,7 @@ package modelsdev
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/daidaiJ/modelq/internal/locale"
 )
 
 // APIURL is the full catalog endpoint. It can be overridden with the
@@ -211,7 +214,7 @@ func download(ctx context.Context, httpClient *http.Client) (*Catalog, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "openrouter-cli")
+	req.Header.Set("User-Agent", "modelq")
 
 	client := httpClient
 	if client == nil {
@@ -219,24 +222,26 @@ func download(ctx context.Context, httpClient *http.Client) (*Catalog, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", url, err)
+		return nil, fmt.Errorf("%s", locale.T("fetch "+url+": "+err.Error(), "拉取 "+url+" 失败: "+err.Error()))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", url, err)
+		return nil, fmt.Errorf("%s", locale.T("read "+url+": "+err.Error(), "读取 "+url+" 失败: "+err.Error()))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("models.dev returned HTTP %d: %s", resp.StatusCode, truncateBody(string(body), 200))
+		return nil, fmt.Errorf("%s", locale.T(
+			fmt.Sprintf("models.dev returned HTTP %d: %s", resp.StatusCode, truncateBody(string(body), 200)),
+			fmt.Sprintf("models.dev 返回 HTTP %d: %s", resp.StatusCode, truncateBody(string(body), 200))))
 	}
 
 	cat := Catalog{FetchedAt: time.Now()}
 	if err := json.Unmarshal(body, &cat.Providers); err != nil {
-		return nil, fmt.Errorf("decode models.dev catalog: %w", err)
+		return nil, fmt.Errorf("%s", locale.T("decode models.dev catalog: "+err.Error(), "解析 models.dev 目录失败: "+err.Error()))
 	}
 	if len(cat.Providers) == 0 {
-		return nil, fmt.Errorf("models.dev catalog is empty")
+		return nil, errors.New(locale.T("models.dev catalog is empty", "models.dev 目录为空"))
 	}
 	return &cat, nil
 }
@@ -260,7 +265,7 @@ func cachePath() (path string, ok bool) {
 	if err != nil {
 		return "", false
 	}
-	dir := filepath.Join(root, "openrouter-cli")
+	dir := filepath.Join(root, "modelq")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", false
 	}

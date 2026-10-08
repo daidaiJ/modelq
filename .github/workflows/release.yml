@@ -1,4 +1,4 @@
-# Release workflow for orx.
+# Release workflow for mqx.
 #
 # Trigger: push an annotated tag (git tag -a v1.0.0 -m "...")
 #   - builds binaries for windows/linux/darwin x amd64/arm64 (CGO_ENABLED=0)
@@ -62,13 +62,13 @@ jobs:
         run: |
           mkdir -p dist
           go build -trimpath -ldflags "-s -w -X main.version=${{ github.ref_name }}" \
-            -o dist/orx-${{ matrix.goos }}-${{ matrix.arch }}${{ matrix.ext }} .
+            -o dist/mqx-${{ matrix.goos }}-${{ matrix.arch }}${{ matrix.ext }} ./cmd/mqx
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: orx-${{ matrix.goos }}-${{ matrix.arch }}
-          path: dist/orx-${{ matrix.goos }}-${{ matrix.arch }}${{ matrix.ext }}
+          name: mqx-${{ matrix.goos }}-${{ matrix.arch }}
+          path: dist/mqx-${{ matrix.goos }}-${{ matrix.arch }}${{ matrix.ext }}
           if-no-files-found: error
 
   release:
@@ -106,7 +106,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          for f in orx-*; do
+          for f in mqx-*; do
             [ -f "$f" ] || continue
             sha256sum "$f" > "$f.sha256"
           done
@@ -116,6 +116,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
-            dist/orx-* \
+            dist/mqx-* \
             --title "${{ github.ref_name }}" \
             --notes-file notes.md

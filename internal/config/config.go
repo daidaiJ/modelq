@@ -20,13 +20,13 @@ type Config struct {
 //  2. OPENROUTER_BASE_URL environment variable
 //  3. base_url in the config file
 //
-// The config file is searched as openrouter-cli.(toml|yaml|json) under
+// The config file is searched as modelq.(toml|yaml|json) under
 // $XDG_CONFIG_HOME or ~/.config, and alongside the executable.
 func Resolve(flagBaseURL string) (*Config, error) {
 	v := viper.New()
-	v.SetConfigName("openrouter-cli")
+	v.SetConfigName("modelq")
 	v.SetConfigType("toml")
-	v.AddConfigPath(filepath.Join(configHome(), "openrouter-cli"))
+	v.AddConfigPath(filepath.Join(configHome(), "modelq"))
 	v.AddConfigPath(configHome())
 	v.AddConfigPath(".")
 
@@ -51,7 +51,7 @@ func Resolve(flagBaseURL string) (*Config, error) {
 
 // ConfigPath returns the preferred config file path for documentation purposes.
 func ConfigPath() string {
-	return filepath.Join(configHome(), "openrouter-cli", "openrouter-cli.toml")
+	return filepath.Join(configHome(), "modelq", "modelq.toml")
 }
 
 func configHome() string {

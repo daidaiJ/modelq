@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/daidaiJ/modelq/internal/locale"
 )
 
 const defaultBaseURL = "https://openrouter.ai/api/v1"
@@ -35,23 +37,25 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "openrouter-cli")
+	req.Header.Set("User-Agent", "modelq")
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("%s", locale.T("request failed: "+err.Error(), "请求失败: "+err.Error()))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	if err != nil {
-		return fmt.Errorf("read response: %w", err)
+		return fmt.Errorf("%s", locale.T("read response: "+err.Error(), "读取响应失败: "+err.Error()))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("openrouter returned HTTP %d: %s", resp.StatusCode, truncate(string(body), 400))
+		return fmt.Errorf("%s", locale.T(
+			fmt.Sprintf("openrouter returned HTTP %d: %s", resp.StatusCode, truncate(string(body), 400)),
+			fmt.Sprintf("OpenRouter 返回 HTTP %d: %s", resp.StatusCode, truncate(string(body), 400))))
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+		return fmt.Errorf("%s", locale.T("decode response: "+err.Error(), "解析响应失败: "+err.Error()))
 	}
 	return nil
 }

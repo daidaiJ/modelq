@@ -10,6 +10,8 @@ description: >
 
 # Confirm model parameters via public catalogs (curl + jq)
 
+> 中文版：[SKILL.zh-CN.md](SKILL.zh-CN.md)
+
 Two public JSON sources cover this task; both work without any API key:
 
 - OpenRouter catalog — `https://openrouter.ai/api/v1/models`: canonical
