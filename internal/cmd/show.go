@@ -13,6 +13,7 @@ import (
 
 	"github.com/daidaiJ/modelq/internal/api"
 	"github.com/daidaiJ/modelq/internal/format"
+	"github.com/daidaiJ/modelq/internal/fx"
 	"github.com/daidaiJ/modelq/internal/locale"
 	"github.com/daidaiJ/modelq/internal/modelsdev"
 )
@@ -87,12 +88,13 @@ id 支持精确、唯一前缀或子串匹配；有歧义时列出候选。默�
 				return cat, nil
 			}
 
+			fxr := fxRate(cmd.Context(), flagRefresh)
 			out := make([]modelHit, 0, len(ids))
 			var text strings.Builder
 			wrote := false
 			failed := 0
 			for _, id := range ids {
-				hit, part, rerr := resolveShowEntry(orModels, loadCat, sel, id)
+				hit, part, rerr := resolveShowEntry(orModels, loadCat, sel, id, fxr)
 				if rerr != nil {
 					if fromStdin {
 						fmt.Fprintf(os.Stderr, "%s: %v\n", id, rerr)
@@ -125,28 +127,29 @@ id 支持精确、唯一前缀或子串匹配；有歧义时列出候选。默�
 		},
 	}
 	c.Flags().StringVarP(&flagSource, "source", "s", "", locale.T("data source: all, openrouter, modelsdev (default all)", "数据来源：all、openrouter、modelsdev（默认 all）"))
-	c.Flags().BoolVar(&flagRefresh, "refresh", false, locale.T("re-download the models.dev catalog, ignoring the cache", "忽略缓存，重新下载 models.dev 目录"))
+	c.Flags().BoolVar(&flagRefresh, "refresh", false, locale.T("re-download the models.dev catalog and the exchange rate, ignoring caches", "忽略缓存，重新下载 models.dev 目录与汇率"))
 	return c
 }
 
 // resolveShowEntry resolves one id across the selected sources: OpenRouter
 // first (with models.dev enrichment), then a models.dev fallback for ids the
 // OpenRouter catalog does not carry. text is the human rendering, empty for
-// --json callers.
-func resolveShowEntry(orModels []api.Model, loadCat func() (*modelsdev.Catalog, error), sel sourceSel, id string) (modelHit, string, error) {
+// --json callers. fxr is the resolved USD→CNY rate for zh output; nil skips
+// the CNY annotation.
+func resolveShowEntry(orModels []api.Model, loadCat func() (*modelsdev.Catalog, error), sel sourceSel, id string, fxr *fx.Rate) (modelHit, string, error) {
 	if sel.openrouter && orModels != nil {
 		m, ambiguous, found := resolveOpenRouter(orModels, id)
 		if found {
 			if m == nil {
 				return modelHit{}, "", ambiguousError(id, ambiguous)
 			}
-			hit := modelHit{Source: "openrouter", Model: m}
-			text := renderDetail(m)
+			hit := modelHit{Source: "openrouter", Model: m, FX: fxr}
+			text := renderDetail(m, fxr)
 			if sel.modelsdev {
 				if cat, cerr := loadCat(); cerr == nil {
 					hit.ModelsDev = modelsDevRef(cat, m.ID)
 					if hit.ModelsDev != nil {
-						text += renderMDRef(cat, *hit.ModelsDev)
+						text += renderMDRef(cat, *hit.ModelsDev, fxr)
 					}
 				} else {
 					unavail := fmt.Sprintf("models.dev unavailable (%v); showing OpenRouter data only", cerr)
@@ -173,11 +176,11 @@ func resolveShowEntry(orModels []api.Model, loadCat func() (*modelsdev.Catalog, 
 		}
 	}
 	if pick := preferredVendor(confident, id); pick != nil {
-		return modelHit{Source: "models.dev", ModelsDev: pick}, renderDevDetail(cat, *pick), nil
+		return modelHit{Source: "models.dev", ModelsDev: pick, FX: fxr}, renderDevDetail(cat, *pick, fxr), nil
 	}
 	switch len(confident) {
 	case 1:
-		return modelHit{Source: "models.dev", ModelsDev: &confident[0]}, renderDevDetail(cat, confident[0]), nil
+		return modelHit{Source: "models.dev", ModelsDev: &confident[0], FX: fxr}, renderDevDetail(cat, confident[0], fxr), nil
 	case 0:
 		return modelHit{}, "", noMatchError(cat, id)
 	default:
@@ -292,7 +295,7 @@ func ptrPrice(p *float64) float64 {
 }
 
 // renderDevDetail renders a models.dev entry as aligned label/value lines.
-func renderDevDetail(cat *modelsdev.Catalog, m modelsdev.Match) string {
+func renderDevDetail(cat *modelsdev.Catalog, m modelsdev.Match, fxr *fx.Rate) string {
 	md := m.Model
 	info := cat.Info(m.ProviderID)
 
@@ -351,11 +354,14 @@ func renderDevDetail(cat *modelsdev.Catalog, m modelsdev.Match) string {
 
 	b.WriteString("\n")
 	b.WriteString(locale.T("pricing (USD per 1M tokens, vendor reference)\n", "价格（美元 / 1M tokens，厂商参考）\n"))
+	if note := fxNote(fxr); note != "" {
+		fmt.Fprintf(&b, "  %s\n", note)
+	}
 	price := func(k string, p *float64) {
 		if p == nil {
 			return
 		}
-		fmt.Fprintf(&b, "  %-18s %s\n", k, format.Price(*p))
+		fmt.Fprintf(&b, "  %-18s %s\n", k, format.WithCNY(*p, cnyRate(fxr)))
 	}
 	price("input", md.Cost.Input)
 	price("output", md.Cost.Output)
@@ -366,9 +372,9 @@ func renderDevDetail(cat *modelsdev.Catalog, m modelsdev.Match) string {
 	price("audio_out", md.Cost.OutputAudio)
 	for _, t := range md.Cost.Tiers {
 		parts := []string{
-			"in " + format.Price(ptrPrice(t.Input)),
-			"out " + format.Price(ptrPrice(t.Output)),
-			"cache " + format.Price(ptrPrice(t.CacheRead)),
+			"in " + format.WithCNY(ptrPrice(t.Input), cnyRate(fxr)),
+			"out " + format.WithCNY(ptrPrice(t.Output), cnyRate(fxr)),
+			"cache " + format.WithCNY(ptrPrice(t.CacheRead), cnyRate(fxr)),
 		}
 		size := format.Tokens(t.Tier.Size)
 		detail := strings.Join(parts, ", ")
@@ -433,7 +439,7 @@ func formatPriceOpt(f *float64) string {
 
 // renderMDRef renders the models.dev enrichment section: vendor reference
 // pricing and parameters the OpenRouter catalog does not carry.
-func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match) string {
+func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match, fxr *fx.Rate) string {
 	md := ref.Model
 	info := cat.Info(ref.ProviderID)
 
@@ -476,9 +482,12 @@ func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match) string {
 		if p == nil {
 			return
 		}
-		fmt.Fprintf(&b, "  %-18s %s\n", k, format.Price(*p))
+		fmt.Fprintf(&b, "  %-18s %s\n", k, format.WithCNY(*p, cnyRate(fxr)))
 	}
 	b.WriteString(locale.T("  vendor reference pricing (USD per 1M tokens)\n", "  厂商参考价格（美元 / 1M tokens）\n"))
+	if note := fxNote(fxr); note != "" {
+		fmt.Fprintf(&b, "  %s\n", note)
+	}
 	price("input", md.Cost.Input)
 	price("output", md.Cost.Output)
 	price("cache_read", md.Cost.CacheRead)
@@ -488,9 +497,9 @@ func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match) string {
 	price("audio_out", md.Cost.OutputAudio)
 	for _, t := range md.Cost.Tiers {
 		parts := []string{
-			"in " + format.Price(ptrPrice(t.Input)),
-			"out " + format.Price(ptrPrice(t.Output)),
-			"cache " + format.Price(ptrPrice(t.CacheRead)),
+			"in " + format.WithCNY(ptrPrice(t.Input), cnyRate(fxr)),
+			"out " + format.WithCNY(ptrPrice(t.Output), cnyRate(fxr)),
+			"cache " + format.WithCNY(ptrPrice(t.CacheRead), cnyRate(fxr)),
 		}
 		size := format.Tokens(t.Tier.Size)
 		detail := strings.Join(parts, ", ")
@@ -503,7 +512,7 @@ func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match) string {
 }
 
 // renderDetail renders one model as aligned label/value lines.
-func renderDetail(m *api.Model) string {
+func renderDetail(m *api.Model, fxr *fx.Rate) string {
 	var b strings.Builder
 	row := func(k, v string) {
 		if v == "" || v == "-" {
@@ -554,11 +563,14 @@ func renderDetail(m *api.Model) string {
 
 	b.WriteString("\n")
 	b.WriteString(locale.T("pricing (USD per 1M tokens)\n", "价格（美元 / 1M tokens）\n"))
+	if note := fxNote(fxr); note != "" {
+		fmt.Fprintf(&b, "  %s\n", note)
+	}
 	priceRow := func(k string, v float64) {
 		if v < 0 {
 			return
 		}
-		fmt.Fprintf(&b, "  %-16s %s\n", k, format.Price(v))
+		fmt.Fprintf(&b, "  %-16s %s\n", k, format.WithCNY(v, cnyRate(fxr)))
 	}
 	p := m.Pricing
 	priceRow("input", p.InputPerM())
@@ -607,10 +619,15 @@ func newCompareCmd() *cobra.Command {
 				}
 				picked = append(picked, m)
 			}
+			fxr := fxRate(cmd.Context(), flagRefresh)
 			if flagJSON {
-				return printJSON(picked)
+				vals := make([]api.Model, len(picked))
+				for i, m := range picked {
+					vals[i] = *m
+				}
+				return printJSON(withFX(vals, fxr))
 			}
-			fmt.Print(renderCompare(picked))
+			fmt.Print(renderCompare(picked, fxr))
 			return nil
 		},
 	}
@@ -618,7 +635,7 @@ func newCompareCmd() *cobra.Command {
 }
 
 // renderCompare prints one row per attribute and one column per model.
-func renderCompare(models []*api.Model) string {
+func renderCompare(models []*api.Model, fxr *fx.Rate) string {
 	// Each row is [label, m1, m2, ...]; the header row is [ATTR, MODEL 1, MODEL 2, ...].
 	headers := []string{locale.T("ATTR", "属性")}
 	for i := range models {
@@ -640,9 +657,9 @@ func renderCompare(models []*api.Model) string {
 		attr("id", func(m *api.Model) string { return format.Truncate(m.ID, 34) }),
 		attr(locale.T("context", "上下文"), func(m *api.Model) string { return format.Tokens(m.ContextLength) }),
 		attr(locale.T("max_out", "最大输出"), func(m *api.Model) string { return format.Tokens(m.TopProvider.MaxCompletionTokens) }),
-		attr(locale.T("input/M", "输入/M"), func(m *api.Model) string { return format.Price(m.Pricing.InputPerM()) }),
-		attr(locale.T("output/M", "输出/M"), func(m *api.Model) string { return format.Price(m.Pricing.OutputPerM()) }),
-		attr(locale.T("cache/M", "缓存/M"), func(m *api.Model) string { return format.Price(m.Pricing.CacheReadPerM()) }),
+		attr(locale.T("input/M", "输入/M"), func(m *api.Model) string { return format.WithCNY(m.Pricing.InputPerM(), cnyRate(fxr)) }),
+		attr(locale.T("output/M", "输出/M"), func(m *api.Model) string { return format.WithCNY(m.Pricing.OutputPerM(), cnyRate(fxr)) }),
+		attr(locale.T("cache/M", "缓存/M"), func(m *api.Model) string { return format.WithCNY(m.Pricing.CacheReadPerM(), cnyRate(fxr)) }),
 		attr(locale.T("modality", "模态"), func(m *api.Model) string { return format.Truncate(m.Architecture.Modality, 34) }),
 		attr(locale.T("reasoning", "推理"), func(m *api.Model) string {
 			if m.Reasoning == nil {
@@ -683,6 +700,9 @@ func renderCompare(models []*api.Model) string {
 				b.WriteString("  ")
 			}
 		}
+	}
+	if note := fxNote(fxr); note != "" {
+		b.WriteString("\n" + note)
 	}
 	return b.String()
 }

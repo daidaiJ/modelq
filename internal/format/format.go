@@ -62,6 +62,30 @@ func trimZero(s string) string {
 	return s
 }
 
+// WithCNY renders a USD-per-1M price and, when rate > 0, its CNY equivalent
+// in parentheses. Unknown stays "-", free stays "free".
+func WithCNY(usdPerM, rate float64) string {
+	p := Price(usdPerM)
+	if rate <= 0 || usdPerM <= 0 {
+		return p
+	}
+	return p + " (¥" + cny(usdPerM*rate) + ")"
+}
+
+// cny formats a CNY value with the same precision ladder as Price.
+func cny(v float64) string {
+	switch {
+	case v < 0.1:
+		return trimZero(fmt.Sprintf("%.4f", v))
+	case v < 1:
+		return trimZero(fmt.Sprintf("%.3f", v))
+	case v < 100:
+		return trimZero(fmt.Sprintf("%.2f", v))
+	default:
+		return trimZero(fmt.Sprintf("%.1f", v))
+	}
+}
+
 // Truncate shortens s to at most w display columns, adding an ellipsis.
 func Truncate(s string, w int) string {
 	if w <= 0 {

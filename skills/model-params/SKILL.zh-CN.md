@@ -4,7 +4,7 @@ description: >
   仅用 curl + jq 查询两个公开目录（OpenRouter /models 与 models.dev）确认
   LLM 的能力参数与参考价格，无需安装任何工具、无需 API key。当 agent 需要
   核实模型的上下文长度、tool call、structured output、reasoning/effort 档
-  位、模态或每 1M token 价格时使用。
+  位、模态或每 1M token 价格，或把价格按实时汇率折算为人民币时使用。
 ---
 
 # 用公开目录确认模型参数（curl + jq）
@@ -65,6 +65,28 @@ jq 'to_entries[] | .key as $p | .value.models | to_entries[]
 - 两个目录分隔符习惯不同：OpenRouter 版本号用 `.`（`claude-sonnet-4.5`），
   厂商条目常用 `-`（`claude-sonnet-4-5`），`_` 也会出现。两种都试。
 - 厂商别名：`z-ai` ~ `zai`、`moonshot-ai` ~ `moonshotai`。
+
+## 4. 人民币折算（中文输出）
+
+每个会话取一次 USD→CNY 汇率，任选下方免 key 源即可；四个源都权威且国内
+外访问友好，按序尝试直到成功：
+
+```bash
+# ExchangeRate-API 开放端点（exchangerate-api.com）
+curl -s https://open.er-api.com/v6/latest/USD | jq '.rates.CNY'
+# Frankfurter — 欧洲央行参考汇率
+curl -s 'https://api.frankfurter.dev/v1/latest?base=USD&symbols=CNY' | jq '.rates.CNY'
+# fawazahmed0 currency-api（jsDelivr CDN 镜像）
+curl -s https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json | jq '.usd.cny'
+# fawazahmed0 currency-api（Cloudflare Pages 镜像）
+curl -s https://latest.currency-api.pages.dev/v1/currencies/usd.json | jq '.usd.cny'
+```
+
+美元价格乘以汇率得到人民币，并注明汇率与来源，例如
+`input $3/M（¥20.1/M，1 USD = 6.71 CNY，open.er-api.com）`。models.dev 的
+`cost.*` 已是美元每 1M，直接乘；OpenRouter 的 `pricing.*` 是每 token，
+先乘 1e6 再乘汇率。对结果做合理性检查：明显超出 1–20 CNY/USD 区间的值
+视为响应异常，换下一个源。
 
 ## 数据解读
 

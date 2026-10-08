@@ -54,8 +54,16 @@ go install github.com/daidaiJ/modelq/cmd/mqx@latest
 ## 输出单位与约定
 
 - 价格统一为美元 / 1M tokens；`-` 表示未知，`free` 表示免费。
+- `--lang zh`（或 `MQX_LANG=zh`）时每个价格同时标注人民币换算：USD→CNY
+  汇率依次尝试多个免 key 公共源（ExchangeRate-API、Frankfurter/ECB、
+  currency-api 镜像），磁盘缓存 24 小时；输出下方注明汇率、来源与取数
+  时间。英文纯文本输出仅显示美元。
+- `--json` 输出会在模型字段旁附带同样的汇率（`fx` 对象，含 `usd_cny`、
+  `source`、`fetched_at`）——`list`/`compare` 按元素附带，`show`/`search`
+  按 hit 附带；汇率不可用时字段整体省略。
 - `status: deprecated` 标记旧条目；优先选择非 deprecated 的匹配。
 - `reasoning_options` 类型：`toggle`（开/关）、`effort`（允许档位）、
   `budget_tokens`（min-max 预算范围）。
-- 所有命令只读且可管道；models.dev 数据磁盘缓存 24 小时，`search`/`show`
-  的 `--refresh` 强制重新下载。任一来源不可达时，另一来源独立作答。
+- 所有命令只读且可管道；models.dev 数据与 USD→CNY 汇率均磁盘缓存 24
+  小时，`search`/`show` 的 `--refresh` 强制重新下载。任一来源不可达时，
+  另一来源独立作答；`MQX_FX_URL` 可覆盖汇率接口。

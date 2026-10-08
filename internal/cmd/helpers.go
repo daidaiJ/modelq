@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/daidaiJ/modelq/internal/api"
+	"github.com/daidaiJ/modelq/internal/fx"
 	"github.com/daidaiJ/modelq/internal/locale"
 	"github.com/daidaiJ/modelq/internal/modelsdev"
 )
@@ -67,11 +68,13 @@ func parseSource(v string) (sourceSel, error) {
 }
 
 // modelHit is a resolved model from either catalog; Source discriminates:
-// "openrouter" fills Model, "models.dev" fills ModelsDev.
+// "openrouter" fills Model, "models.dev" fills ModelsDev. FX carries the
+// resolved USD→CNY rate in --json output (omitted when unavailable).
 type modelHit struct {
 	Source    string           `json:"source"`
 	Model     *api.Model       `json:"model,omitempty"`
 	ModelsDev *modelsdev.Match `json:"models_dev,omitempty"`
+	FX        *fx.Rate         `json:"fx,omitempty"`
 }
 
 // splitQueries turns arguments into queries: each argument is one query and

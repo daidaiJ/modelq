@@ -62,7 +62,16 @@ mqx show anthropic/claude-sonnet-4.5 --json | jq '.models_dev.model |
 
 Output language follows `--lang` or the `MQX_LANG` environment variable
 (`en`, `zh`). Pricing is USD per 1M tokens throughout; `-` means unknown,
-`free` means 0.
+`free` means 0. In Chinese output every price also carries its CNY
+equivalent: the USD→CNY rate is resolved from keyless public sources —
+ExchangeRate-API (open.er-api.com), Frankfurter (ECB reference rates), and
+the fawazahmed0 currency-api via jsDelivr and Cloudflare Pages mirrors —
+tried in order until one answers, then cached on disk for 24 hours. A stale
+cache still answers when every source is unreachable (with a warning),
+`--refresh` on `search`/`show` re-downloads it, and `MQX_FX_URL` swaps the
+whole source list for one endpoint. `--json` output attaches the same rate
+as an `fx` object (`usd_cny`, `source`, `fetched_at`) next to the model
+fields, omitted when unavailable. English text output stays USD-only.
 
 ## Agent skills
 

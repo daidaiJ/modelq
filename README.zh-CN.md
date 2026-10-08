@@ -58,7 +58,15 @@ mqx show anthropic/claude-sonnet-4.5 --json | jq '.models_dev.model |
 ```
 
 输出语言跟随 `--lang` 或环境变量 `MQX_LANG`（`en`、`zh`）。价格统一为
-美元 / 1M tokens；`-` 表示未知，`free` 表示免费。
+美元 / 1M tokens；`-` 表示未知，`free` 表示免费。中文输出时每个价格会
+同时标注人民币换算：USD→CNY 汇率依次尝试多个免 key 公共源——
+ExchangeRate-API（open.er-api.com）、Frankfurter（欧洲央行参考汇率）、
+fawazahmed0 currency-api（jsDelivr 与 Cloudflare Pages 双镜像）——取第一个
+成功者，并磁盘缓存 24 小时。全部源不可达时回退过期缓存（带提示）；
+`search`/`show` 的 `--refresh` 强制重新下载；`MQX_FX_URL` 可用单一接口
+替换整个源列表。`--json` 输出会在模型字段旁附带同样的汇率（`fx` 对象，
+含 `usd_cny`、`source`、`fetched_at`），不可用时省略。英文纯文本输出仅
+显示美元。
 
 ## Agent 技能
 

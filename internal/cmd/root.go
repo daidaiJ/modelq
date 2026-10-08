@@ -34,7 +34,12 @@ Data sources:
 
 The base URL, if you need to override it, comes from --base-url,
 OPENROUTER_BASE_URL, or base_url in the config file. Output language:
---lang or the MQX_LANG environment variable (en, zh).
+--lang or the MQX_LANG environment variable (en, zh). Chinese output
+annotates every price with its CNY equivalent at a USD→CNY rate fetched
+from keyless public sources (ExchangeRate-API, Frankfurter/ECB,
+currency-api) and cached on disk for 24h; MQX_FX_URL overrides the rate
+endpoint, and --json output attaches the same rate as an fx object
+(usd_cny, source, fetched_at) next to the model fields.
 
 Every command is read-only and non-interactive. Use --json for
 machine-readable output; tables are for humans.`, `mqx 查询模型参数与价格，并用 models.dev 参考目录补充信息。
@@ -47,7 +52,11 @@ machine-readable output; tables are for humans.`, `mqx 查询模型参数与价�
     接口地址。
 
 如需覆盖接口地址：--base-url、环境变量 OPENROUTER_BASE_URL 或配置文件的
-base_url。输出语言：--lang 或环境变量 MQX_LANG（en、zh）。
+base_url。输出语言：--lang 或环境变量 MQX_LANG（en、zh）。中文输出会按
+USD→CNY 汇率为每个价格标注人民币换算；汇率依次尝试多个免 key 公共源
+（ExchangeRate-API、Frankfurter/ECB、currency-api），磁盘缓存 24 小时，
+MQX_FX_URL 可覆盖汇率接口；--json 输出会在模型字段旁附带同样的汇率
+（fx 对象，含 usd_cny、source、fetched_at）。
 
 所有命令只读且非交互。--json 输出机器可读格式，表格供人类阅读。`),
 		Example: locale.T(`  mqx list                          all models with pricing

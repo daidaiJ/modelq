@@ -5,7 +5,8 @@ description: >
   against two public catalogs (OpenRouter /models and models.dev), no tools
   installed and no API key. Use when the agent needs to verify context
   length, tool call support, structured output, reasoning/effort levels,
-  modalities, or per-1M-token pricing for a model.
+  modalities, or per-1M-token pricing for a model, or restate prices in CNY
+  at a live exchange rate.
 ---
 
 # Confirm model parameters via public catalogs (curl + jq)
@@ -68,6 +69,29 @@ jq 'to_entries[] | .key as $p | .value.models | to_entries[]
   (`claude-sonnet-4.5`), vendor entries often with `-`
   (`claude-sonnet-4-5`); `_` also occurs. Try both.
 - Vendor aliases: `z-ai` ~ `zai`, `moonshot-ai` ~ `moonshotai`.
+
+## 4. CNY conversion for Chinese output
+
+Fetch a USD→CNY rate once per session from any keyless source below; all
+are authoritative and reachable from both inside and outside China. Try
+them in order until one answers:
+
+```bash
+# ExchangeRate-API open endpoint (exchangerate-api.com)
+curl -s https://open.er-api.com/v6/latest/USD | jq '.rates.CNY'
+# Frankfurter — European Central Bank reference rates
+curl -s 'https://api.frankfurter.dev/v1/latest?base=USD&symbols=CNY' | jq '.rates.CNY'
+# fawazahmed0 currency-api (jsDelivr CDN mirror)
+curl -s https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json | jq '.usd.cny'
+# fawazahmed0 currency-api (Cloudflare Pages mirror)
+curl -s https://latest.currency-api.pages.dev/v1/currencies/usd.json | jq '.usd.cny'
+```
+
+Multiply USD prices by the rate and state the rate and its source, e.g.
+`input $3/M（¥20.1/M，1 USD = 6.71 CNY，open.er-api.com）`. models.dev
+`cost.*` is USD per 1M — multiply directly; OpenRouter `pricing.*` is per
+token — multiply by 1e6 first, then by the rate. Sanity-check the value:
+reject anything outside roughly 1–20 CNY per USD as a broken response.
 
 ## Interpreting the data
 

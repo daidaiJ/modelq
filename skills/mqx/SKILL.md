@@ -58,9 +58,19 @@ go install github.com/daidaiJ/modelq/cmd/mqx@latest
 ## Output units and conventions
 
 - Prices are USD per 1M tokens. `-` means unknown, `free` means zero.
+- `--lang zh` (or `MQX_LANG=zh`) annotates every price with its CNY
+  equivalent at a USD→CNY rate resolved from keyless public sources
+  (ExchangeRate-API, Frankfurter/ECB, currency-api mirrors), cached on disk
+  for 24h; a footnote under the output names the rate, source, and fetch
+  time. English text output stays USD-only.
+- `--json` output attaches the same rate as an `fx` object (`usd_cny`,
+  `source`, `fetched_at`) next to the model fields — per element on
+  `list`/`compare`, per hit on `show`/`search`; the field is omitted when
+  the rate is unavailable.
 - `status: deprecated` marks legacy entries; prefer a non-deprecated match.
 - `reasoning_options` types: `toggle` (on/off), `effort` (allowed levels),
   `budget_tokens` (min-max range).
-- All commands are read-only and pipe-safe; models.dev data is cached on
-  disk for 24h, `--refresh` on `search`/`show` forces a re-download. When
-  one source is unreachable, the other answers on its own.
+- All commands are read-only and pipe-safe; models.dev data and the USD→CNY
+  rate are cached on disk for 24h, `--refresh` on `search`/`show` forces a
+  re-download. When one source is unreachable, the other answers on its own;
+  `MQX_FX_URL` overrides the rate endpoint.

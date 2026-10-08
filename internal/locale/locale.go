@@ -66,3 +66,6 @@ func T(en, zh string) string {
 	}
 	return en
 }
+
+// IsZH reports whether the UI language is Chinese.
+func IsZH() bool { return lang == ZH }

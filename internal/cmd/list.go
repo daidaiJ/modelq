@@ -13,6 +13,7 @@ import (
 	"github.com/daidaiJ/modelq/internal/api"
 	"github.com/daidaiJ/modelq/internal/config"
 	"github.com/daidaiJ/modelq/internal/format"
+	"github.com/daidaiJ/modelq/internal/fx"
 	"github.com/daidaiJ/modelq/internal/locale"
 	"github.com/daidaiJ/modelq/internal/modelsdev"
 )
@@ -63,17 +64,22 @@ func newListCmd() *cobra.Command {
 			total := len(models)
 			models = filterModels(models, filterOpts{FreeOnly: freeOnly, MinContext: minContext, Modality: modality})
 			sortModels(models, sortKey, desc)
+			fxr := fxRate(cmd.Context(), flagRefresh)
 			if flagJSON {
 				// --json reflects the same page the table would show;
-				// --limit 0 prints everything.
-				return printJSON(pageSlice(models, page, limit))
+				// --limit 0 prints everything. Each element inlines the
+				// model fields plus the resolved USD→CNY rate.
+				return printJSON(withFX(pageSlice(models, page, limit), fxr))
 			}
 			if len(models) == 0 {
 				fmt.Fprintln(os.Stderr, locale.T("no models matched the filters", "没有模型符合过滤条件"))
 				return nil
 			}
-			fmt.Println(renderList(models, page, limit))
+			fmt.Println(renderList(models, page, limit, fxr))
 			fmt.Println(listFooter(shown(len(models), limit, page), total, page, limit))
+			if note := fxNote(fxr); note != "" {
+				fmt.Println(note)
+			}
 			return nil
 		},
 	}
@@ -140,6 +146,7 @@ mqx show <id>。`),
 			if err != nil {
 				return err
 			}
+			fxr := fxRate(cmd.Context(), flagRefresh)
 
 			// queryResult is the --json envelope: one entry per query with
 			// pagination metadata alongside the page of hits.
@@ -156,7 +163,7 @@ mqx show <id>。`),
 			var lastErr error
 			failed := 0
 			for i, q := range queries {
-				hits, err := runSearch(cmd.Context(), sel, q, sortKey, desc)
+				hits, err := runSearch(cmd.Context(), sel, q, sortKey, desc, fxr)
 				if err != nil {
 					lastErr = err
 					if batch {
@@ -180,7 +187,7 @@ mqx show <id>。`),
 							fmt.Sprintf("no model matches %q\n", q),
 							fmt.Sprintf("没有模型匹配 %q\n", q)))
 					} else {
-						text.WriteString(renderSearch(res.Hits))
+						text.WriteString(renderSearch(res.Hits, fxr))
 						text.WriteString("\n")
 						text.WriteString(searchFooter(res.Total, page, limit))
 					}
@@ -197,12 +204,16 @@ mqx show <id>。`),
 				}
 				return printJSON(results[0])
 			}
-			fmt.Print(strings.TrimRight(text.String(), "\n") + "\n")
+			out := strings.TrimRight(text.String(), "\n")
+			if note := fxNote(fxr); note != "" {
+				out += "\n" + note
+			}
+			fmt.Print(out + "\n")
 			return nil
 		},
 	}
 	c.Flags().StringVarP(&flagSource, "source", "s", "", locale.T("data source: all, openrouter, modelsdev (default all)", "数据来源：all、openrouter、modelsdev（默认 all）"))
-	c.Flags().BoolVar(&flagRefresh, "refresh", false, locale.T("re-download the models.dev catalog, ignoring the cache", "忽略缓存，重新下载 models.dev 目录"))
+	c.Flags().BoolVar(&flagRefresh, "refresh", false, locale.T("re-download the models.dev catalog and the exchange rate, ignoring caches", "忽略缓存，重新下载 models.dev 目录与汇率"))
 	c.Flags().StringVar(&sortKey, "sort", "", locale.T("sort openrouter rows by: id, name, input, output, ctx, maxout", "OpenRouter 行排序键：id、name、input、output、ctx、maxout"))
 	c.Flags().BoolVar(&desc, "desc", false, locale.T("sort descending", "降序排列"))
 	c.Flags().IntVar(&limit, "limit", 50, locale.T("max rows per page (default 50; 0 = all), table and --json", "每页最多行数（默认 50；0 = 全部），对表格和 --json 生效"))
@@ -266,8 +277,9 @@ func listFooter(shown, total, page, limit int) string {
 }
 
 // runSearch queries the selected catalogs; OpenRouter rows honor sortKey.
-// A failing source degrades to the other one instead of aborting.
-func runSearch(ctx context.Context, sel sourceSel, query, sortKey string, desc bool) ([]modelHit, error) {
+// A failing source degrades to the other one instead of aborting. fxr rides
+// along on every hit for --json output.
+func runSearch(ctx context.Context, sel sourceSel, query, sortKey string, desc bool, fxr *fx.Rate) ([]modelHit, error) {
 	var hits []modelHit
 	if sel.openrouter {
 		cl, err := clientFromFlags()
@@ -286,7 +298,7 @@ func runSearch(ctx context.Context, sel sourceSel, query, sortKey string, desc b
 			sortModels(matches, sortKey, desc)
 			for _, m := range matches {
 				mm := m
-				hits = append(hits, modelHit{Source: "openrouter", Model: &mm})
+				hits = append(hits, modelHit{Source: "openrouter", Model: &mm, FX: fxr})
 			}
 		}
 	}
@@ -303,6 +315,7 @@ func runSearch(ctx context.Context, sel sourceSel, query, sortKey string, desc b
 				hits = append(hits, modelHit{
 					Source:    "models.dev",
 					ModelsDev: &modelsdev.Match{ProviderID: h.ProviderID, Model: h.Model, Source: "search"},
+					FX:        fxr,
 				})
 			}
 		}
@@ -311,7 +324,7 @@ func runSearch(ctx context.Context, sel sourceSel, query, sortKey string, desc b
 }
 
 // renderSearch prints the combined-source search table.
-func renderSearch(hits []modelHit) string {
+func renderSearch(hits []modelHit, fxr *fx.Rate) string {
 	headers := []string{
 		locale.T("SOURCE", "来源"),
 		locale.T("MODEL", "模型"),
@@ -330,9 +343,9 @@ func renderSearch(hits []modelHit) string {
 				format.Truncate(h.Model.ID, 46),
 				format.Truncate(h.Model.Name, 24),
 				format.Tokens(h.Model.ContextLength),
-				format.Price(h.Model.Pricing.InputPerM()),
-				format.Price(h.Model.Pricing.OutputPerM()),
-				format.Price(h.Model.Pricing.CacheReadPerM()),
+				format.WithCNY(h.Model.Pricing.InputPerM(), cnyRate(fxr)),
+				format.WithCNY(h.Model.Pricing.OutputPerM(), cnyRate(fxr)),
+				format.WithCNY(h.Model.Pricing.CacheReadPerM(), cnyRate(fxr)),
 			})
 		case h.ModelsDev != nil:
 			md := h.ModelsDev.Model
@@ -341,9 +354,9 @@ func renderSearch(hits []modelHit) string {
 				format.Truncate(mdDisplayID(h.ModelsDev.ProviderID, md), 46),
 				format.Truncate(md.Name, 24),
 				format.Tokens(md.Limit.Context),
-				format.Price(ptrPrice(md.Cost.Input)),
-				format.Price(ptrPrice(md.Cost.Output)),
-				format.Price(ptrPrice(md.Cost.CacheRead)),
+				format.WithCNY(ptrPrice(md.Cost.Input), cnyRate(fxr)),
+				format.WithCNY(ptrPrice(md.Cost.Output), cnyRate(fxr)),
+				format.WithCNY(ptrPrice(md.Cost.CacheRead), cnyRate(fxr)),
 			})
 		}
 	}
@@ -352,7 +365,7 @@ func renderSearch(hits []modelHit) string {
 
 // renderList prints the compact table used by list (OpenRouter catalog),
 // already paginated by the caller.
-func renderList(models []api.Model, page, limit int) string {
+func renderList(models []api.Model, page, limit int, fxr *fx.Rate) string {
 	models = pageSlice(models, page, limit)
 	headers := []string{
 		locale.T("MODEL", "模型"),
@@ -368,9 +381,9 @@ func renderList(models []api.Model, page, limit int) string {
 			format.Truncate(m.ID, 46),
 			format.Tokens(m.ContextLength),
 			format.Tokens(m.TopProvider.MaxCompletionTokens),
-			format.Price(m.Pricing.InputPerM()),
-			format.Price(m.Pricing.OutputPerM()),
-			format.Price(m.Pricing.CacheReadPerM()),
+			format.WithCNY(m.Pricing.InputPerM(), cnyRate(fxr)),
+			format.WithCNY(m.Pricing.OutputPerM(), cnyRate(fxr)),
+			format.WithCNY(m.Pricing.CacheReadPerM(), cnyRate(fxr)),
 		})
 	}
 	return format.Table(headers, rows)
