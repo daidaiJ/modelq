@@ -33,6 +33,7 @@ go install github.com/daidaiJ/modelq/cmd/mqx@latest
 | 限定单一目录 | 追加 `-s openrouter` 或 `-s modelsdev` |
 | 对比两个或多个模型 | `mqx compare <id1> <id2>` |
 | 浏览 / 过滤 OpenRouter 目录 | `mqx list [--free] [--min-ctx N] [--modality image]` |
+| 批量查询 / 分页 | `mqx search k3 5.3-flash`（一个参数 = 一个查询）；`--page N`、`--limit N`（默认 50，0 = 全部） |
 | 机器可读输出 | 任意命令追加 `--json` |
 
 ## 确认模型能力参数（agent 典型流程）

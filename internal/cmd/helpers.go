@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/daidaiJ/modelq/internal/api"
-	"github.com/daidaiJ/modelq/internal/format"
 	"github.com/daidaiJ/modelq/internal/locale"
 	"github.com/daidaiJ/modelq/internal/modelsdev"
 )
@@ -73,6 +72,79 @@ type modelHit struct {
 	Source    string           `json:"source"`
 	Model     *api.Model       `json:"model,omitempty"`
 	ModelsDev *modelsdev.Match `json:"models_dev,omitempty"`
+}
+
+// splitQueries turns arguments into queries: each argument is one query and
+// commas inside it split further, so `mqx search k3 5.3-flash` batches two
+// queries while `mqx search "5.3 flash"` is a single keyword query whose
+// terms are ANDed.
+func splitQueries(args []string) []string {
+	var out []string
+	for _, a := range args {
+		for _, part := range strings.Split(a, ",") {
+			if q := strings.TrimSpace(part); q != "" {
+				out = append(out, q)
+			}
+		}
+	}
+	return out
+}
+
+// pageSlice returns the 1-based page of items at the given page size;
+// limit <= 0 means no truncation.
+func pageSlice[T any](items []T, page, limit int) []T {
+	if limit <= 0 || len(items) == 0 {
+		return items
+	}
+	start := (page - 1) * limit
+	if start >= len(items) {
+		return nil
+	}
+	end := start + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[start:end]
+}
+
+// pageCount reports how many pages a result set spans at the page size.
+func pageCount(n, limit int) int {
+	if limit <= 0 || n == 0 {
+		return 1
+	}
+	return (n + limit - 1) / limit
+}
+
+// shown reports how many rows the table prints for one page after
+// pagination; limit <= 0 means all rows.
+func shown(n, limit, page int) int {
+	if limit <= 0 {
+		return n
+	}
+	start := (page - 1) * limit
+	if start >= n {
+		return 0
+	}
+	end := start + limit
+	if end > n {
+		end = n
+	}
+	return end - start
+}
+
+// checkPageLimit validates the pagination flags with actionable errors.
+func checkPageLimit(page, limit int) error {
+	if page < 1 {
+		return fmt.Errorf("%s", locale.T(
+			fmt.Sprintf("invalid --page %d (must be >= 1)", page),
+			fmt.Sprintf("无效 --page %d（必须 >= 1）", page)))
+	}
+	if limit < 0 {
+		return fmt.Errorf("%s", locale.T(
+			fmt.Sprintf("invalid --limit %d (must be >= 0, 0 = all)", limit),
+			fmt.Sprintf("无效 --limit %d（必须 >= 0，0 = 全部）", limit)))
+	}
+	return nil
 }
 
 // fetchModels loads the OpenRouter catalog using the resolved client.
@@ -295,33 +367,6 @@ type filterOpts struct {
 	FreeOnly   bool
 	MinContext int64
 	Modality   string
-}
-
-// renderList prints the compact table used by list (OpenRouter catalog).
-func renderList(models []api.Model, limit int) string {
-	if limit > 0 && len(models) > limit {
-		models = models[:limit]
-	}
-	headers := []string{
-		locale.T("MODEL", "模型"),
-		locale.T("CTX", "上下文"),
-		locale.T("MAX OUT", "最大输出"),
-		locale.T("INPUT/M", "输入/M"),
-		locale.T("OUTPUT/M", "输出/M"),
-		locale.T("CACHE/M", "缓存/M"),
-	}
-	rows := make([][]string, 0, len(models))
-	for _, m := range models {
-		rows = append(rows, []string{
-			format.Truncate(m.ID, 46),
-			format.Tokens(m.ContextLength),
-			format.Tokens(m.TopProvider.MaxCompletionTokens),
-			format.Price(m.Pricing.InputPerM()),
-			format.Price(m.Pricing.OutputPerM()),
-			format.Price(m.Pricing.CacheReadPerM()),
-		})
-	}
-	return format.Table(headers, rows)
 }
 
 func printJSON(v any) error {

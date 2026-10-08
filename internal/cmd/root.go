@@ -29,7 +29,7 @@ Data sources:
   - models.dev (https://models.dev), a community-maintained catalog across
     providers, used to resolve approximate model ids and to show vendor
     reference pricing and capability parameters. Cached on disk for 24h;
-    --refresh on 'dev' and 'show' forces a re-download, and the
+    --refresh on 'search' and 'show' forces a re-download, and the
     MODELSDEV_API_URL environment variable overrides the endpoint.
 
 The base URL, if you need to override it, comes from --base-url,
@@ -42,7 +42,7 @@ machine-readable output; tables are for humans.`, `mqx 查询模型参数与价�
 数据来源：
   - OpenRouter 公开 /models 元数据接口，完全公开：所有命令无需 API key。
   - models.dev（https://models.dev），社区维护的跨厂商模型目录，用于解析
-    近似模型 id、展示厂商参考价格与能力参数。磁盘缓存 24 小时；'dev' 与
+    近似模型 id、展示厂商参考价格与能力参数。磁盘缓存 24 小时；'search' 与
     'show' 的 --refresh 强制重新下载；环境变量 MODELSDEV_API_URL 可覆盖
     接口地址。
 
@@ -51,11 +51,13 @@ base_url。输出语言：--lang 或环境变量 MQX_LANG（en、zh）。
 
 所有命令只读且非交互。--json 输出机器可读格式，表格供人类阅读。`),
 		Example: locale.T(`  mqx list                          all models with pricing
-  mqx search gemini flash           find models in both catalogs
+  mqx search "5.3 flash"            one keyword query across both catalogs
+  mqx search k3 5.3-flash           batch: two queries in one run
   mqx show anthropic/claude-sonnet-4.5   one model in detail
   mqx compare gpt-5-mini gpt-5-nano side-by-side comparison
   mqx show glm-5.3-flash            models.dev fallback for non-OpenRouter ids`, `  mqx list                          全部模型及价格
-  mqx search gemini flash           跨两个目录搜索模型
+  mqx search "5.3 flash"            单个关键词查询，跨两个目录
+  mqx search k3 5.3-flash           批量：一次跑两个查询
   mqx show anthropic/claude-sonnet-4.5   单个模型详情
   mqx compare gpt-5-mini gpt-5-nano 并排对比
   mqx show glm-5.3-flash            非 OpenRouter id 回退 models.dev`),

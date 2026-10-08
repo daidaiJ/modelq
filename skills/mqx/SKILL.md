@@ -35,6 +35,7 @@ go install github.com/daidaiJ/modelq/cmd/mqx@latest
 | Restrict to one catalog | append `-s openrouter` or `-s modelsdev` |
 | Compare two or more models | `mqx compare <id1> <id2>` |
 | Browse / filter the OpenRouter catalog | `mqx list [--free] [--min-ctx N] [--modality image]` |
+| Batch queries / paginate | `mqx search k3 5.3-flash` (one arg = one query); `--page N`, `--limit N` (default 50, 0 = all) |
 | Machine-readable output | append `--json` to any command |
 
 ## Confirm a model's capability parameters (typical agent flow)
