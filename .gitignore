@@ -1,0 +1,4 @@
+/dist/
+/orx
+*.exe
+*.test
