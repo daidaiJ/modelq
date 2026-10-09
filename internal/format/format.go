@@ -87,6 +87,17 @@ func cny(v float64) string {
 	}
 }
 
+// eastAsian marks a terminal whose font renders East Asian Ambiguous runes
+// (¥, …, ™, ...) as 2 columns, the common case for CJK-locale terminals.
+// It is set once at startup from the resolved UI language.
+var eastAsian bool
+
+// SetEastAsian selects how ambiguous-width runes are measured: wide (2
+// columns, CJK terminals) or narrow (1 column, Latin terminals).
+func SetEastAsian(v bool) {
+	eastAsian = v
+}
+
 // Truncate shortens s to at most w display columns, adding an ellipsis.
 func Truncate(s string, w int) string {
 	if w <= 0 {
@@ -95,14 +106,18 @@ func Truncate(s string, w int) string {
 	if displayWidth(s) <= w {
 		return s
 	}
-	if w == 1 {
+	ew := runeWidth('…')
+	if w == ew {
 		return "…"
+	}
+	if w < ew {
+		return ""
 	}
 	var b strings.Builder
 	cols := 0
 	for _, r := range s {
 		rw := runeWidth(r)
-		if cols+rw > w-1 {
+		if cols+rw > w-ew {
 			break
 		}
 		b.WriteRune(r)
@@ -137,8 +152,49 @@ func Width(s string) int {
 }
 
 // runeWidth reports the display width of one rune: 2 for East Asian wide
-// ranges, 1 otherwise. Zero-width runes are not expected in table content.
+// ranges, 1 otherwise. When eastAsian is set (CJK-locale terminals) the
+// ambiguous-width runes below also count as 2; those are exactly the runes
+// CJK terminal fonts render fullwidth, so ignoring them drifts every body
+// row containing ¥ or a truncated "…" name off its header columns.
 func runeWidth(r rune) int {
+	if eastAsian {
+		switch {
+		case r >= 0x00A1 && r <= 0x00A5, // ¡ ¤ £ ¥
+			r >= 0x00A7 && r <= 0x00AA,   // § ¨ ª
+			r >= 0x00B0 && r <= 0x00B3,   // ° ± ² ³
+			r >= 0x00B7 && r <= 0x00B8,   // · ¸
+			r == 0x00D7, r == 0x00F7,     // × ÷
+			r >= 0x2013 && r <= 0x2014,   // – —
+			r >= 0x2018 && r <= 0x2019,   // ‘ ’
+			r >= 0x201C && r <= 0x201D,   // “ ”
+			r >= 0x2020 && r <= 0x2023,   // † ‡ • ′
+			r >= 0x2024 && r <= 0x2026,   // …
+			r == 0x2030,                  // ‰
+			r >= 0x2032 && r <= 0x2033,   // ′ ″
+			r == 0x203B,                  // ※
+			r == 0x203E,                  // ‾
+			r == 0x20A9,                  // ₩
+			r >= 0x2103 && r <= 0x2105,   // ℃ ℅
+			r == 0x2109,                  // ℉
+			r == 0x2116,                  // №
+			r == 0x2121, r == 0x2122,     // ℡ ™
+			r == 0x212B,                  // Å
+			r >= 0x2190 && r <= 0x2199,   // ← → arrows
+			r == 0x21D2, r == 0x21D4,     // ⇒ ⇔
+			r == 0x2202, r == 0x2206,     // ∂ ∆
+			r == 0x220F, r == 0x2211,     // ∏ ∑
+			r == 0x221A, r == 0x221E,     // √ ∞
+			r == 0x222B, r == 0x2248,     // ∫ ≈
+			r >= 0x2260 && r <= 0x2262,   // ≠ ≡
+			r >= 0x2264 && r <= 0x2267,   // ≦ ≧
+			r >= 0x2460 && r <= 0x24FF,   // ① circled numbers
+			r >= 0x25A0 && r <= 0x25FF,   // ■ ● geometric shapes
+			r >= 0x2605 && r <= 0x2606,   // ★ ☆
+			r == 0x2640, r == 0x2642,     // ♀ ♂
+			r >= 0x2660 && r <= 0x2669: // ♠ ♣ card suits
+			return 2
+		}
+	}
 	switch {
 	case r >= 0x1100 && r <= 0x115F, // Hangul Jamo
 		r >= 0x2E80 && r <= 0x303E, // CJK Radicals..CJK Symbols

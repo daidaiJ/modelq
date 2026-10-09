@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/daidaiJ/modelq/internal/cmd"
+	"github.com/daidaiJ/modelq/internal/format"
 	"github.com/daidaiJ/modelq/internal/locale"
 )
 
@@ -20,6 +21,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mqx: "+err.Error())
 		os.Exit(1)
 	}
+	// CJK-locale terminal fonts render ambiguous-width runes (¥, …, ™, ...)
+	// as 2 columns; measure them that way so table body rows stay aligned.
+	format.SetEastAsian(locale.IsZH())
 	if err := cmd.NewRootCmd(version).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "mqx: "+err.Error())
 		os.Exit(1)

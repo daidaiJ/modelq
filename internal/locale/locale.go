@@ -49,6 +49,9 @@ func FromArgs(args []string, env string) error {
 	return nil
 }
 
+// IsZH reports whether the UI language is Chinese.
+func IsZH() bool { return lang == ZH }
+
 // normalize folds regional suffixes so "zh-CN" and "zh_CN" select zh.
 func normalize(v string) string {
 	v = strings.ToLower(strings.TrimSpace(v))
@@ -66,6 +69,3 @@ func T(en, zh string) string {
 	}
 	return en
 }
-
-// IsZH reports whether the UI language is Chinese.
-func IsZH() bool { return lang == ZH }

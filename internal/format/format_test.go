@@ -69,6 +69,28 @@ func TestWidth(t *testing.T) {
 	}
 }
 
+func TestWidthAmbiguous(t *testing.T) {
+	// CJK-locale terminal fonts render ambiguous-width runes (¥, …, ™) as
+	// 2 columns; width must follow so table rows stay aligned.
+	defer SetEastAsian(false)
+	SetEastAsian(true)
+	cases := []struct {
+		s    string
+		want int
+	}{
+		{"¥20.1", 6},
+		{"OpenAI: GPT-5 Mini (bat…", 25}, // … is wide
+		{"™", 2},
+		{"℃", 2},
+		{"上下文", 6},
+	}
+	for _, tc := range cases {
+		if got := Width(tc.s); got != tc.want {
+			t.Errorf("Width(%q) = %d, want %d", tc.s, got, tc.want)
+		}
+	}
+}
+
 func TestPadCJK(t *testing.T) {
 	// "来源" displays as 4 columns; padding to 10 adds 6 spaces, and the
 	// padded result still measures 10 display columns.
@@ -87,5 +109,17 @@ func TestTruncateCJK(t *testing.T) {
 	}
 	if got := Truncate("上下文", 6); got != "上下文" {
 		t.Errorf("Truncate within width = %q, want %q", got, "上下文")
+	}
+}
+
+func TestTruncateAmbiguous(t *testing.T) {
+	defer SetEastAsian(false)
+	SetEastAsian(true)
+	// The ellipsis itself is wide in this mode: room for it must be reserved.
+	if got := Truncate("abcdefgh", 8); Width(got) != 8 {
+		t.Errorf("Truncate then width = %d, want 8 (%q)", Width(got), got)
+	}
+	if got := Truncate("abcdefghij", 2); got != "…" {
+		t.Errorf("Truncate to 2 = %q, want %q", got, "…")
 	}
 }
