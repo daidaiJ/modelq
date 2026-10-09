@@ -11,6 +11,7 @@ import (
 
 	"github.com/daidaiJ/modelq/internal/api"
 	"github.com/daidaiJ/modelq/internal/fx"
+	"github.com/daidaiJ/modelq/internal/format"
 	"github.com/daidaiJ/modelq/internal/locale"
 	"github.com/daidaiJ/modelq/internal/modelsdev"
 )
@@ -91,6 +92,24 @@ func splitQueries(args []string) []string {
 		}
 	}
 	return out
+}
+
+// tokens renders a token count as whole K/M units, or as the exact raw
+// count when --raw is set.
+func tokens(n int64) string {
+	if flagRaw {
+		return format.TokensExact(n)
+	}
+	return format.Tokens(n)
+}
+
+// tokensDetail renders "exact (compact)" for detail rows; with --raw it
+// collapses to the exact count alone.
+func tokensDetail(n int64) string {
+	if flagRaw {
+		return format.TokensExact(n)
+	}
+	return format.TokensExact(n) + " (" + format.Tokens(n) + ")"
 }
 
 // pageSlice returns the 1-based page of items at the given page size;

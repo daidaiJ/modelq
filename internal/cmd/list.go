@@ -342,7 +342,7 @@ func renderSearch(hits []modelHit, fxr *fx.Rate) string {
 				"openrouter",
 				format.Truncate(h.Model.ID, 46),
 				format.Truncate(h.Model.Name, 24),
-				format.Tokens(h.Model.ContextLength),
+				tokens(h.Model.ContextLength),
 				format.WithCNY(h.Model.Pricing.InputPerM(), cnyRate(fxr)),
 				format.WithCNY(h.Model.Pricing.OutputPerM(), cnyRate(fxr)),
 				format.WithCNY(h.Model.Pricing.CacheReadPerM(), cnyRate(fxr)),
@@ -353,7 +353,7 @@ func renderSearch(hits []modelHit, fxr *fx.Rate) string {
 				"models.dev",
 				format.Truncate(mdDisplayID(h.ModelsDev.ProviderID, md), 46),
 				format.Truncate(md.Name, 24),
-				format.Tokens(md.Limit.Context),
+				tokens(md.Limit.Context),
 				format.WithCNY(ptrPrice(md.Cost.Input), cnyRate(fxr)),
 				format.WithCNY(ptrPrice(md.Cost.Output), cnyRate(fxr)),
 				format.WithCNY(ptrPrice(md.Cost.CacheRead), cnyRate(fxr)),
@@ -379,8 +379,8 @@ func renderList(models []api.Model, page, limit int, fxr *fx.Rate) string {
 	for _, m := range models {
 		rows = append(rows, []string{
 			format.Truncate(m.ID, 46),
-			format.Tokens(m.ContextLength),
-			format.Tokens(m.TopProvider.MaxCompletionTokens),
+			tokens(m.ContextLength),
+			tokens(m.TopProvider.MaxCompletionTokens),
 			format.WithCNY(m.Pricing.InputPerM(), cnyRate(fxr)),
 			format.WithCNY(m.Pricing.OutputPerM(), cnyRate(fxr)),
 			format.WithCNY(m.Pricing.CacheReadPerM(), cnyRate(fxr)),

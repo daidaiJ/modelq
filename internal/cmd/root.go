@@ -10,6 +10,7 @@ var (
 	flagBaseURL string
 	flagJSON    bool
 	flagLang    string
+	flagRaw     bool
 	flagRefresh bool
 	flagSource  string
 )
@@ -77,6 +78,7 @@ MQX_FX_URL 可覆盖汇率接口；--json 输出会在模型字段旁附带同�
 	root.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", locale.T("OpenRouter API base URL (default https://openrouter.ai/api/v1)", "OpenRouter API 基础地址（默认 https://openrouter.ai/api/v1）"))
 	root.PersistentFlags().BoolVar(&flagJSON, "json", false, locale.T("emit raw JSON instead of a table", "输出原始 JSON 而非表格"))
 	root.PersistentFlags().StringVar(&flagLang, "lang", "", locale.T("output language: en or zh (default en; MQX_LANG env also works)", "输出语言：en 或 zh（默认 en，也可用 MQX_LANG 环境变量）"))
+	root.PersistentFlags().BoolVarP(&flagRaw, "raw", "r", false, locale.T("show raw token counts instead of whole K/M units", "显示原始 token 数而非整数 K/M"))
 
 	root.AddCommand(
 		newListCmd(),

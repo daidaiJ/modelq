@@ -321,11 +321,11 @@ func renderDevDetail(cat *modelsdev.Catalog, m modelsdev.Match, fxr *fx.Rate) st
 	if md.CanonicalModelID != "" && md.CanonicalModelID != md.ID {
 		row("canonical_model_id", md.CanonicalModelID)
 	}
-	row("context", format.TokensExact(md.Limit.Context)+" ("+format.Tokens(md.Limit.Context)+")")
+	row("context", tokensDetail(md.Limit.Context))
 	if md.Limit.Input > 0 && md.Limit.Input != md.Limit.Context {
-		row("max_input", format.TokensExact(md.Limit.Input)+" ("+format.Tokens(md.Limit.Input)+")")
+		row("max_input", tokensDetail(md.Limit.Input))
 	}
-	row("max_output", format.TokensExact(md.Limit.Output)+" ("+format.Tokens(md.Limit.Output)+")")
+	row("max_output", tokensDetail(md.Limit.Output))
 	if len(md.Modalities.Input) > 0 {
 		row("input", strings.Join(md.Modalities.Input, ", "))
 	}
@@ -376,7 +376,7 @@ func renderDevDetail(cat *modelsdev.Catalog, m modelsdev.Match, fxr *fx.Rate) st
 			"out " + format.WithCNY(ptrPrice(t.Output), cnyRate(fxr)),
 			"cache " + format.WithCNY(ptrPrice(t.CacheRead), cnyRate(fxr)),
 		}
-		size := format.Tokens(t.Tier.Size)
+		size := tokens(t.Tier.Size)
 		detail := strings.Join(parts, ", ")
 		fmt.Fprintf(&b, "  %-18s %s\n", locale.T("tiers", "分段"), locale.T("ctx >= "+size+": "+detail, "上下文 ≥ "+size+": "+detail))
 	}
@@ -472,10 +472,10 @@ func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match, fxr *fx.Rate) stri
 		row("reasoning", rl)
 	}
 	if md.Limit.Output > 0 {
-		row("max_output", format.TokensExact(md.Limit.Output)+" ("+format.Tokens(md.Limit.Output)+")")
+		row("max_output", tokensDetail(md.Limit.Output))
 	}
 	if md.Limit.Input > 0 {
-		row("max_input", format.TokensExact(md.Limit.Input)+" ("+format.Tokens(md.Limit.Input)+")")
+		row("max_input", tokensDetail(md.Limit.Input))
 	}
 
 	price := func(k string, p *float64) {
@@ -501,7 +501,7 @@ func renderMDRef(cat *modelsdev.Catalog, ref modelsdev.Match, fxr *fx.Rate) stri
 			"out " + format.WithCNY(ptrPrice(t.Output), cnyRate(fxr)),
 			"cache " + format.WithCNY(ptrPrice(t.CacheRead), cnyRate(fxr)),
 		}
-		size := format.Tokens(t.Tier.Size)
+		size := tokens(t.Tier.Size)
 		detail := strings.Join(parts, ", ")
 		fmt.Fprintf(&b, "  %-18s %s\n", locale.T("tiers", "分段"), locale.T("ctx >= "+size+": "+detail, "上下文 ≥ "+size+": "+detail))
 	}
@@ -529,8 +529,8 @@ func renderDetail(m *api.Model, fxr *fx.Rate) string {
 	if m.AliasTarget != nil && m.AliasTarget.Slug != "" {
 		row("alias_of", fmt.Sprintf("%s (%s)", m.AliasTarget.Slug, m.AliasTarget.Name))
 	}
-	row("context_length", fmt.Sprintf("%s (%s)", format.TokensExact(m.ContextLength), format.Tokens(m.ContextLength)))
-	row("max_output", fmt.Sprintf("%s (%s)", format.TokensExact(m.TopProvider.MaxCompletionTokens), format.Tokens(m.TopProvider.MaxCompletionTokens)))
+	row("context_length", tokensDetail(m.ContextLength))
+	row("max_output", tokensDetail(m.TopProvider.MaxCompletionTokens))
 	row("modality", m.Architecture.Modality)
 	if len(m.Architecture.InputModalities) > 0 {
 		row("input", strings.Join(m.Architecture.InputModalities, ", "))
@@ -655,8 +655,8 @@ func renderCompare(models []*api.Model, fxr *fx.Rate) string {
 	rows := [][]string{
 		headers,
 		attr("id", func(m *api.Model) string { return format.Truncate(m.ID, 34) }),
-		attr(locale.T("context", "上下文"), func(m *api.Model) string { return format.Tokens(m.ContextLength) }),
-		attr(locale.T("max_out", "最大输出"), func(m *api.Model) string { return format.Tokens(m.TopProvider.MaxCompletionTokens) }),
+		attr(locale.T("context", "上下文"), func(m *api.Model) string { return tokens(m.ContextLength) }),
+		attr(locale.T("max_out", "最大输出"), func(m *api.Model) string { return tokens(m.TopProvider.MaxCompletionTokens) }),
 		attr(locale.T("input/M", "输入/M"), func(m *api.Model) string { return format.WithCNY(m.Pricing.InputPerM(), cnyRate(fxr)) }),
 		attr(locale.T("output/M", "输出/M"), func(m *api.Model) string { return format.WithCNY(m.Pricing.OutputPerM(), cnyRate(fxr)) }),
 		attr(locale.T("cache/M", "缓存/M"), func(m *api.Model) string { return format.WithCNY(m.Pricing.CacheReadPerM(), cnyRate(fxr)) }),
@@ -672,7 +672,7 @@ func renderCompare(models []*api.Model, fxr *fx.Rate) string {
 	widths := make([]int, len(headers))
 	for _, r := range rows {
 		for i, cell := range r {
-			if n := len([]rune(cell)); n > widths[i] {
+			if n := format.Width(cell); n > widths[i] {
 				widths[i] = n
 			}
 		}
