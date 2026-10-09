@@ -4,22 +4,23 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
-// Tokens renders a token count compactly: 1048576 -> "1.05M", 131072 -> "131K".
+// Tokens renders a token count as whole K/M units: 1048576 -> "1M",
+// 131072 -> "131K". Values are rounded to the nearest unit regardless of
+// whether the underlying catalog uses 1000 or 1024 as its base.
 func Tokens(n int64) string {
 	if n <= 0 {
 		return "-"
 	}
-	switch {
-	case n >= 1_000_000:
-		return trimZero(fmt.Sprintf("%.2f", float64(n)/1_000_000)) + "M"
-	case n >= 1_000:
-		return trimZero(fmt.Sprintf("%.1f", float64(n)/1_000)) + "K"
-	default:
+	if n < 1000 {
 		return strconv.FormatInt(n, 10)
 	}
+	k := (n + 500) / 1000
+	if k >= 1000 {
+		return fmt.Sprintf("%dM", (k+500)/1000)
+	}
+	return fmt.Sprintf("%dK", k)
 }
 
 // TokensExact renders an exact count with thousands separators.
@@ -91,23 +92,75 @@ func Truncate(s string, w int) string {
 	if w <= 0 {
 		return ""
 	}
-	if utf8.RuneCountInString(s) <= w {
+	if displayWidth(s) <= w {
 		return s
 	}
 	if w == 1 {
 		return "…"
 	}
-	r := []rune(s)
-	return string(r[:w-1]) + "…"
+	var b strings.Builder
+	cols := 0
+	for _, r := range s {
+		rw := runeWidth(r)
+		if cols+rw > w-1 {
+			break
+		}
+		b.WriteRune(r)
+		cols += rw
+	}
+	return b.String() + "…"
 }
 
-// Pad right-pads s to width w based on rune count.
+// Pad right-pads s to width w based on terminal display columns.
 func Pad(s string, w int) string {
-	n := utf8.RuneCountInString(s)
+	n := displayWidth(s)
 	if n >= w {
 		return s
 	}
 	return s + strings.Repeat(" ", w-n)
+}
+
+// displayWidth returns the terminal column count of s, counting East Asian
+// wide runes (CJK, Hangul, Kana, fullwidth forms, common emoji) as 2 columns
+// so tables with Chinese headers stay aligned.
+func displayWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		w += runeWidth(r)
+	}
+	return w
+}
+
+// Width returns the terminal display column count of s.
+func Width(s string) int {
+	return displayWidth(s)
+}
+
+// runeWidth reports the display width of one rune: 2 for East Asian wide
+// ranges, 1 otherwise. Zero-width runes are not expected in table content.
+func runeWidth(r rune) int {
+	switch {
+	case r >= 0x1100 && r <= 0x115F, // Hangul Jamo
+		r >= 0x2E80 && r <= 0x303E, // CJK Radicals..CJK Symbols
+		r >= 0x3041 && r <= 0x33FF, // Hiragana..CJK Compatibility
+		r >= 0x3400 && r <= 0x4DBF, // CJK Extension A
+		r >= 0x4E00 && r <= 0x9FFF, // CJK Unified
+		r >= 0xA000 && r <= 0xA4CF, // Yi
+		r >= 0xA960 && r <= 0xA97F, // Hangul Jamo Extended-A
+		r >= 0xAC00 && r <= 0xD7A3, // Hangul Syllables
+		r >= 0xF900 && r <= 0xFAFF, // CJK Compatibility Ideographs
+		r >= 0xFE10 && r <= 0xFE19, // Vertical Forms
+		r >= 0xFE30 && r <= 0xFE6F, // CJK Compatibility Forms
+		r >= 0xFF00 && r <= 0xFF60, // Fullwidth Forms
+		r >= 0xFFE0 && r <= 0xFFE6, // Fullwidth Signage
+		r >= 0x1F300 && r <= 0x1F64F, // emoji pictographs
+		r >= 0x1F900 && r <= 0x1F9FF, // emoji supplements
+		r >= 0x20000 && r <= 0x2FFFD, // CJK Extension B+
+		r >= 0x30000 && r <= 0x3FFFD: // CJK Extension G+
+		return 2
+	default:
+		return 1
+	}
 }
 
 // Table renders a simple aligned table with a header separator.
@@ -117,12 +170,12 @@ func Table(headers []string, rows [][]string) string {
 	}
 	widths := make([]int, len(headers))
 	for i, h := range headers {
-		widths[i] = utf8.RuneCountInString(h)
+		widths[i] = displayWidth(h)
 	}
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < len(widths) {
-				if n := utf8.RuneCountInString(cell); n > widths[i] {
+				if n := displayWidth(cell); n > widths[i] {
 					widths[i] = n
 				}
 			}
