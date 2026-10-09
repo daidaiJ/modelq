@@ -37,7 +37,7 @@ mqx show zhipuai/glm-5.3-flash
 mqx search glm-5.3-flash
 mqx search kimi-k3 -s modelsdev      # 限定单一目录
 
-# 批量查询与分页（默认每页截断 50 行）
+# 批量查询与分页（默认每页截断 5 行）
 mqx search k3 5.3-flash              # 一次跑两个查询
 mqx search "5.3 flash" --page 2      # 引号内空格 = AND 词；--page 翻页
 

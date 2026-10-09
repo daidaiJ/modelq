@@ -85,7 +85,7 @@ func newListCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&sortKey, "sort", "", locale.T("sort by: id, name, input, output, ctx, maxout", "排序键：id、name、input、output、ctx、maxout"))
 	c.Flags().BoolVar(&desc, "desc", false, locale.T("sort descending", "降序排列"))
-	c.Flags().IntVar(&limit, "limit", 50, locale.T("max rows to show (default 50; 0 = all), table and --json", "最多显示行数（默认 50；0 = 全部），对表格和 --json 生效"))
+	c.Flags().IntVar(&limit, "limit", 5, locale.T("max rows to show (default 5; 0 = all), table and --json", "最多显示行数（默认 5；0 = 全部），对表格和 --json 生效"))
 	c.Flags().IntVar(&page, "page", 1, locale.T("1-based page of results", "结果页码，从 1 开始"))
 	c.Flags().BoolVar(&freeOnly, "free", false, locale.T("only free models", "仅免费模型"))
 	c.Flags().Int64Var(&minContext, "min-ctx", 0, locale.T("only models with at least this many context tokens", "仅上下文不少于该 token 数的模型"))
@@ -113,7 +113,7 @@ per line.
 By default both sources are queried and results carry a SOURCE column;
 -s/--source restricts the search to one catalog (openrouter or modelsdev).
 --sort applies to OpenRouter rows. Results are truncated to --limit rows
-(default 50, 0 = all) and --page selects the page, applied per query. Use
+(default 5, 0 = all) and --page selects the page, applied per query. Use
 mqx show <id> for full details.`, `跨两个目录按 id 或名称搜索模型。
 
 每个参数是一个查询，参数内逗号会再拆分：mqx search k3 5.3-flash 为批量两个
@@ -122,7 +122,7 @@ mqx show <id> for full details.`, `跨两个目录按 id 或名称搜索模型�
 
 默认同时查询两个来源，结果表带 SOURCE 列；-s/--source 可限定单一来源
 （openrouter 或 modelsdev）。--sort 仅对 OpenRouter 行生效。结果按 --limit
-截断（默认 50，0 = 全部），--page 翻页，均按每个查询独立生效。详情用
+截断（默认 5，0 = 全部），--page 翻页，均按每个查询独立生效。详情用
 mqx show <id>。`),
 		Example: locale.T(`  mqx search "5.3 flash"                   one keyword query (terms ANDed)
   mqx search k3 5.3-flash                  batch: two queries in one run
@@ -216,7 +216,7 @@ mqx show <id>。`),
 	c.Flags().BoolVar(&flagRefresh, "refresh", false, locale.T("re-download the models.dev catalog and the exchange rate, ignoring caches", "忽略缓存，重新下载 models.dev 目录与汇率"))
 	c.Flags().StringVar(&sortKey, "sort", "", locale.T("sort openrouter rows by: id, name, input, output, ctx, maxout", "OpenRouter 行排序键：id、name、input、output、ctx、maxout"))
 	c.Flags().BoolVar(&desc, "desc", false, locale.T("sort descending", "降序排列"))
-	c.Flags().IntVar(&limit, "limit", 50, locale.T("max rows per page (default 50; 0 = all), table and --json", "每页最多行数（默认 50；0 = 全部），对表格和 --json 生效"))
+	c.Flags().IntVar(&limit, "limit", 5, locale.T("max rows per page (default 5; 0 = all), table and --json", "每页最多行数（默认 5；0 = 全部），对表格和 --json 生效"))
 	c.Flags().IntVar(&page, "page", 1, locale.T("1-based page of results, per query", "结果页码，从 1 开始，按查询独立生效"))
 	return c
 }

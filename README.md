@@ -39,7 +39,7 @@ mqx show zhipuai/glm-5.3-flash
 mqx search glm-5.3-flash
 mqx search kimi-k3 -s modelsdev      # one catalog only
 
-# Batch queries and pagination (truncated to 50 rows per page by default)
+# Batch queries and pagination (truncated to 5 rows per page by default)
 mqx search k3 5.3-flash              # two queries in one run
 mqx search "5.3 flash" --page 2      # quoted space = AND terms; --page paginates
 
